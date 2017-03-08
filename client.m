@@ -34,14 +34,14 @@ has_quit = false;
 while ~has_quit
     fprintf('PIC32 MOTOR DRIVER INTERFACE\n\n');
     % display the menu options; this list will grow
-    fprintf('     q: Quit\n');
-    fprintf('     a: Read current sensor (ADC counts)\n');
+    fprintf('     a: Read current sensor (ADC counts)\n'    );
     fprintf('     b: Read current sensor (mA)\n');
     fprintf('     c: Read encoder (counts)\n');
     fprintf('     d: Read encoder (deg)\n');
     fprintf('     e: Reset encoder\n');
     fprintf('     f: Set PWM (-100 to 100)\n');
     fprintf('     p: Unpower the motor\n');
+    fprintf('     q: Quit client\n');
     fprintf('     r: Get mode\n');
    
         % read the user's choice
@@ -52,28 +52,36 @@ while ~has_quit
     
     % take the appropriate action
     switch selection     
-        case 'q'
-            has_quit = true;             % exit client
         case 'a'                         % Read current sensor (ADC counts)
             adc_clkticks = fscanf(mySerial, '%d');
-            fprintf('ADC clock counts: %d\n', adc_clkticks);
+            fprintf('The motor current is %d ADC counts.\n', adc_clkticks);
         case 'b'                         % Read current sensor (mA)
             adc_estamps = fscanf(mySerial, '%f');
-            fprintf('ADC-derived current: %f mA\n', adc_estamps); 
+            fprintf('The motor current is %0.3f mA.\n', adc_estamps); 
         case 'c'                         % Read encoder counts
             counts = fscanf(mySerial, '%d');
             fprintf('The motor angle is %d counts.\n', counts);
         case 'd'                         % Read encoder deg
             deg_100x = fscanf(mySerial, '%d');
-            fprintf('The motor angle is %0.1f degrees\n', deg_100x/100.0);
+            fprintf('The motor angle is %0.1f degrees.\n', deg_100x/100.0);
         case 'e'                         % Reset encoder
+            fprintf('Encoder reset.\n');
+            fprintf('Currently at new zero position.\n');
         case 'f'                         % Set PWM (-100 to 100)
-            dutycycle = input('Enter desired duty cycle (-100 to 100): ');
+            dutycycle = input('Enter desired PWM value (-100 to 100): ');
             fprintf(mySerial, '%d', dutycycle);
+            if (dutycycle < 0)
+                fprintf('PWM set to %d percent in the counterclockwise direction.\n', dutycycle);
+            else
+                fprintf('PWM set to %d percent in the clockwise direction.\n', dutycycle);
+            end
+        case 'q'
+            has_quit = true;             % Exit client
         case 'p'                         % Unpower the motor
+            fprintf('PIC32 reset to IDLE mode.\n');
         case 'r'                         % Get mode
             mode = fscanf(mySerial, '%s');
-            fprintf('PIC32 mode: %s\n', mode);
+            fprintf('PIC32 currently in %s mode.\n', mode);
         otherwise
             fprintf('Invalid Selection %c\n', selection);
     end
