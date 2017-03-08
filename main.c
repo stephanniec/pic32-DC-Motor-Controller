@@ -24,9 +24,13 @@ void __ISR(_TIMER_2_VECTOR, IPL5SOFT) Controller(void){
         OC1RS = -next_dc*(PR3+1)/100;
         LATDbits.LATD6 = 0;
       }
-      else {                   // + or no PWM
+      else if (next_dc > 0){                   // + or no PWM
         OC1RS = next_dc*(PR3+1)/100;
         LATDbits.LATD6 = 1;
+      }
+      else {
+        OC1RS = 0;
+        LATDbits.LATD6 = 0;
       }
       break;
     }// End case PWM
@@ -67,12 +71,6 @@ int main()
     NU32_ReadUART3(buffer,BUF_SIZE); // Expect next character to be menu command
     NU32_LED2 = 1;                   // Clear the error LED
     switch (buffer[0]) {
-      case 'q':
-      {
-        // Handle q for quit.
-        setmode(IDLE);
-        break;
-      }
       case 'a': // Read current sensor (ADC counts)
       {
         sprintf(buffer, "%d\r\n", read_adc());
@@ -104,16 +102,21 @@ int main()
       }
       case 'f': // Set PWM
       {
-        setmode(PWM);
         NU32_ReadUART3(buffer, BUF_SIZE); // Read new duty cycle
         sscanf(buffer, "%d", &next_dc);
-
+        setmode(PWM);
         sprintf(buffer, "%d\r\n", next_dc); // View input
         NU32_WriteUART3(buffer);
         break;
       }
       case 'p': // Unpower motor
       {
+        setmode(IDLE);
+        break;
+      }
+      case 'q':
+      {
+        // Handle q for quit.
         setmode(IDLE);
         break;
       }
