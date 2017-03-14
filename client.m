@@ -69,7 +69,7 @@ while ~has_quit
             fprintf('Currently at new zero position.\n');
         case 'f'                         % Set PWM (-100 to 100)
             dutycycle = input('Enter desired PWM value (-100 to 100): ');
-            fprintf(mySerial, '%d', dutycycle);
+            fprintf(mySerial, '%d\n', dutycycle);
             if (dutycycle < 0)
                 fprintf('PWM set to %d percent in the counterclockwise direction.\n', dutycycle);
             else

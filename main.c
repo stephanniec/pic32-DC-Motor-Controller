@@ -105,8 +105,6 @@ int main()
         NU32_ReadUART3(buffer, BUF_SIZE); // Read new duty cycle
         sscanf(buffer, "%d", &next_dc);
         setmode(PWM);
-        sprintf(buffer, "%d\r\n", next_dc); // View input
-        NU32_WriteUART3(buffer);
         break;
       }
       case 'p': // Unpower motor
