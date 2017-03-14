@@ -44,13 +44,13 @@ float anti_windup(float u_volts){
   return u_volts;
 }
 
-void new_pwm(float u_new){
-    if (u_new < 0){
+void new_pwm(float u_volts){
+    if (u_volts < 0){
         LATDbits.LATD6 = 1; //ccw
-        OC1RS = (unsigned int) ((-u_new/100.0)*PR3);
+        OC1RS = (unsigned int) ((-u_volts/3.3)*PR3);
     }
     else {
         LATDbits.LATD6 = 0; //cw
-        OC1RS = (unsigned int) ((u_new/100.0)*PR3);
+        OC1RS = (unsigned int) ((u_volts/3.3)*PR3);
     }
 }

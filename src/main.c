@@ -63,19 +63,16 @@ void __ISR(_TIMER_2_VECTOR, IPL5SOFT) Controller(void){
           //Read ADC value (mA) and append adc_arr[]
           adc_current = convert_adc();
 
-          //PI control: I error = R - Y
+          //PI control: I error (mA) = R - Y
           e = ref_current - adc_current;
           eint = eint + e;
-          u = kp_I*e + ki_I*eint; // u is in mA
+          u = kp_I*e + ki_I*eint; // gains convert mA to V
 
-          // //Converting controller output u (mA) to A
-          // unew = u/1000.0;
-
-          // //Adjust for anti-windup during motor saturation @ +/-3.3V
-          // unew = anti_windup(unew);
+          //Adjust for anti-windup during motor saturation @ +/-3.3V
+          unew = anti_windup(u);
 
           //Calculate new pwm and set motor direction using pin D6
-          new_pwm(u);
+          new_pwm(unew);
 
           if(store_data){ //Put mA values into global arrays
             ref_arr[itest_count] = ref_current;
@@ -85,7 +82,7 @@ void __ISR(_TIMER_2_VECTOR, IPL5SOFT) Controller(void){
           itest_count++;
       }//end if
 
-      else{ //Reset counter, r(t), integral error, disable storing data
+      else{ //Reset counter, r(t), int error, & disable storing data
           itest_count = 0;
           ref_current = REF_mA;
           eint = 0;
