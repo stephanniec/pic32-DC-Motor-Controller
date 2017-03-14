@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "currentsense.h"
 #include <xc.h>
 
@@ -30,8 +31,8 @@ int read_adc(void){
 }
 
 float convert_adc(void){
-    int adc_raw = 0, adc_amps = 0;
+    float adc_raw = 0, adc_amps = 0;
     adc_raw = read_adc();
-    adc_amps = (adc_raw - 447.483345)/(-0.580402);
+    adc_amps = (adc_raw - 506.52993)/(-0.72724);
     return adc_amps;
 }

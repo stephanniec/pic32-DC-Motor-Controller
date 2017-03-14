@@ -33,3 +33,24 @@ void isr_init(void){
   IEC0bits.T2IE = 1;       // Enable interrupt
 
 }
+
+float anti_windup(float u_volts){
+  if (u_volts > 3.3){
+    u_volts = 3.3;
+  }
+  else if (u_volts < -3.3){
+    u_volts = -3.3;
+  }
+  return u_volts;
+}
+
+void new_pwm(float u_new){
+    if (u_new < 0){
+        LATDbits.LATD6 = 1; //ccw
+        OC1RS = (unsigned int) ((-u_new/100.0)*PR3);
+    }
+    else {
+        LATDbits.LATD6 = 0; //cw
+        OC1RS = (unsigned int) ((u_new/100.0)*PR3);
+    }
+}
