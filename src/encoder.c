@@ -31,7 +31,7 @@ void encoder_init(void) {
   SPI4CONbits.ON = 1;       // turn SPI on
 }
 
-int encoder_degree(void){   // return angle in 1/10th degrees
+int encoder_degree(void){   // returns 100x actual angle
   encoder_command(1);
   return 100*360*(encoder_command(1)-32768)/(4*448);
 }

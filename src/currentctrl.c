@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "NU32.h"
 #include "currentctrl.h"
 
@@ -28,29 +29,41 @@ void isr_init(void){
   OC1CONbits.ON = 1;       // Turn on OC1
 
   //OTHER ISR SETTINGS
-  IPC2bits.T2IP = 5;       // Set priority lvl 5
+  IPC2bits.T2IP = 4;       // Set priority lvl 4
   IFS0bits.T2IF = 0;       // Clear interrupt flag
   IEC0bits.T2IE = 1;       // Enable interrupt
 
 }
 
-float anti_windup(float u_volts){
-  if (u_volts > 3.3){
-    u_volts = 3.3;
+float anti_windup(float eint){ //WIP: need to find bounds
+  if (eint > 500){
+    eint = 500;
   }
-  else if (u_volts < -3.3){
-    u_volts = -3.3;
+  else if (eint < -500){
+    eint = -500;
   }
-  return u_volts;
+  return eint;
 }
 
-void new_pwm(float u_volts){
-    if (u_volts < 0){
+void new_pwm(float unew){ //From current control
+    if (unew < 0){
         LATDbits.LATD6 = 1; //ccw
-        OC1RS = (unsigned int) ((-u_volts/3.3)*PR3);
+        OC1RS = (unsigned int) ((-unew/100.0)*PR3);
     }
     else {
         LATDbits.LATD6 = 0; //cw
-        OC1RS = (unsigned int) ((u_volts/3.3)*PR3);
+        OC1RS = (unsigned int) ((unew/100.0)*PR3);
     }
+}
+
+void new_pwm_pos(float unew){ //From current control for position control
+    if (unew < 0){
+        OC1RS = 0;
+    }
+    else {
+        OC1RS = (unsigned int) ((unew/100.0)*PR3);
+    }
+    char output[100];
+    sprintf(output, "OC1RS = %d\r\n", OC1RS);
+    NU32_WriteUART3(output);
 }

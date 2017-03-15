@@ -36,3 +36,4 @@ float convert_adc(void){
     adc_amps = (adc_raw - 506.52993)/(-0.72724);
     return adc_amps;
 }
+

@@ -77,34 +77,35 @@ while ~has_quit
             dutycycle = input('Enter desired PWM value (-100 to 100): ');
             fprintf(mySerial, '%d\n', dutycycle);
             if (dutycycle < 0)
-                fprintf('PWM set to %d percent in the counterclockwise direction.\n', dutycycle);
-            else
                 fprintf('PWM set to %d percent in the clockwise direction.\n', dutycycle);
+            else
+                fprintf('PWM set to %d percent in the counterclockwise direction.\n', dutycycle);
             end
         case 'g'                        % Set current gains as floats
-            kp_set = input('Enter your desired Kp current gain: ');
+            kp_set = input('Enter your desired Kp current gain (e.g 45.0): ');
             fprintf(mySerial, '%f\n', kp_set);
-            ki_set = input('Enter you desired Ki current gain: ');
+            ki_set = input('Enter your desired Ki current gain (e.g 1.75): ');
             fprintf(mySerial, '%f\n', ki_set);
             fprintf('Sending Kp = %.3f and Ki = %.3f to the current controller.\n', kp_set, ki_set);
         case 'h'                        % Get current gains
             Kp = fscanf(mySerial, '%f');
             Ki = fscanf(mySerial, '%f');
-            fprintf('The current controller is using Kp = %.3f and Ki = %.3f.\n', Kp, Ki); 
+            fprintf('The current controller is using Kp = %.6f and Ki = %.6f.\n', Kp, Ki); 
         case 'i'                        % Set position gains
-            
-            %WIP
-            kp_pos = input('');
-            fprintf(mySerial, '%f\n', kp_pos);
-            ki_pos = input('');
-            fprintf(mySerial, '%f\n', ki_pos);
-            kd_pos = input('');
-            fprintf(mySerial, '%f\n', kd_pos);
-            
+            kp_pos_set = input('Enter your desired Kp position gain: ');
+            fprintf(mySerial, '%f\n', kp_pos_set);
+            ki_pos_set = input('Enter your desired Ki position gain: ');
+            fprintf(mySerial, '%f\n', ki_pos_set);
+            kd_pos_set = input('Enter your desired Kd position gain: ');
+            fprintf(mySerial, '%f\n', kd_pos_set);
+            fprintf('Sending Kp = %.3f, Ki = %.3f, and Kd = %.3f to the position controller.\n',...
+                kp_pos_set, ki_pos_set, kd_pos_set);
         case 'j'                        % Get position gains
-            
-            %WIP
-            
+            Kp_pos = fscanf(mySerial, '%f');
+            Ki_pos = fscanf(mySerial, '%f');
+            Kd_pos = fscanf(mySerial, '%f');
+            fprintf('The position controller is using Kp = %.3f, Ki = %.3f, and Kd = %.3f.\n',...
+                Kp_pos, Ki_pos, Kd_pos);
         case 'k'                        % Test current control
             nsamples = fscanf(mySerial,'%d');       % first get the number of samples being sent
             data = zeros(nsamples,2);               % two values per sample:  ref and actual
@@ -125,9 +126,9 @@ while ~has_quit
             ylabel('Current (mA)');
             xlabel('Time (ms)');   
         case 'l'                        % Go to angle (deg)
-                       
-            %WIP
-        
+            target_deg = input('Enter the desired motor angle in degrees: ');
+            fprintf(mySerial, '%f\n', target_deg);
+            fprintf('Motor moving to %.3f degrees.\n', target_deg);
         case 'q'
             has_quit = true;             % Exit client
         case 'p'                         % Unpower the motor
