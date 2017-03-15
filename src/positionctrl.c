@@ -18,16 +18,13 @@ void position_init(void){
   IEC0bits.T4IE = 1;       // Enable interrupt
 }
 
-float pos_dir(float error){ //Returning abs(error)
+void pos_dir(float error){ //Returning abs(error)
     if (error < 0){
         LATDbits.LATD6 = 0; //cw
-        error = -error;
     }
     else {
         LATDbits.LATD6 = 1; //ccw
-        error = error;
     }
-    return error;
 }
 
 /*--------------------------------------------------------------------

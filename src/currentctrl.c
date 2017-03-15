@@ -56,14 +56,3 @@ void new_pwm(float unew){ //From current control
     }
 }
 
-void new_pwm_pos(float unew){ //From current control for position control
-    if (unew < 0){
-        OC1RS = 0;
-    }
-    else {
-        OC1RS = (unsigned int) ((unew/100.0)*PR3);
-    }
-    char output[100];
-    sprintf(output, "OC1RS = %d\r\n", OC1RS);
-    NU32_WriteUART3(output);
-}

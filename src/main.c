@@ -23,7 +23,7 @@ static volatile float ref_deg = 0;        // Reference angle in deg
 static volatile float holding_current = 0;
 static volatile int store_data = 0;       // Disable data storing
 
-void __ISR(_TIMER_2_VECTOR, IPL5SOFT) MasterController(void){
+void __ISR(_TIMER_2_VECTOR, IPL4SOFT) MasterController(void){
   // 5000 Hz
 
   switch (pic_mode){
@@ -113,19 +113,26 @@ void __ISR(_TIMER_2_VECTOR, IPL5SOFT) MasterController(void){
 
       // Get desired current
       ref_current = holding_current;
+      sprintf(buffer, "current from pcon = %f\r\n", ref_current);
+      NU32_WriteUART3(buffer);
 
       // Read ADC value (mA)
       adc_current = convert_adc();
+      sprintf(buffer, "adc read = %f\r\n", adc_current);
+      NU32_WriteUART3(buffer);
 
       // PI control: I error (mA) = R - Y
       e = ref_current - adc_current;
+      sprintf(buffer, "e = %f\r\n", e);
+      NU32_WriteUART3(buffer);
       eint = eint + e;
-
-      // Adjust for anti-windup during motor saturation
-      //eint = anti_windup(eint);
+      sprintf(buffer, "eint = %f\r\n", eint);
+      NU32_WriteUART3(buffer);
 
       u = kp_I*e + ki_I*eint; // Gains convert mA to mV
       unew = ((u/1000)/3.3)*100; // Converts mV to DC = X%
+      sprintf(buffer, "unew = %f\r\n", unew);
+      NU32_WriteUART3(buffer);
 
       if (unew > 100.0){    // Actuator saturation
         unew = 100.0;
@@ -134,8 +141,11 @@ void __ISR(_TIMER_2_VECTOR, IPL5SOFT) MasterController(void){
         unew = -100.0;
       }
 
+      sprintf(buffer, "unew converted = %f\r\n", unew);
+      NU32_WriteUART3(buffer);
+
       //Calculate new pwm
-      new_pwm_pos(unew);
+      new_pwm(unew);
       break;
     }
     default:
@@ -149,7 +159,7 @@ void __ISR(_TIMER_2_VECTOR, IPL5SOFT) MasterController(void){
 }
 
 void __ISR(_TIMER_4_VECTOR, IPL5SOFT) PositionController(void){
-  //200Hz
+  //200Hz, priority lvl 5
   static float actual_deg = 0;
   static float err = 0, err_dot = 0, err_prev = 0;
   static float uhold = 0;
@@ -162,13 +172,10 @@ void __ISR(_TIMER_4_VECTOR, IPL5SOFT) PositionController(void){
       //encoder_degree returns int 100x of actual degree
 
       err = ref_deg - actual_deg;
-      err = pos_dir(err);    // Set spin direction and adjust error sign
-      sprintf(buffer, "Error is %f\r\n", err);
-      NU32_WriteUART3(buffer);
+      pos_dir(err);    // Set spin direction
 
       err_dot = err - err_prev;  //Assume finite differences
       err_int = err_int + err;
-      // err_int = anti_windup(err_int);
 
       float current_temp = kp_pos*err + ki_pos*err_int + kd_pos*err_dot;
 
@@ -310,7 +317,7 @@ int main()
       case 'l': // Go to angle (deg)
       {
         NU32_ReadUART3(buffer, BUF_SIZE);
-        sscanf(buffer, "%f", &ref_deg);  // define 100x desired ang
+        sscanf(buffer, "%f", &ref_deg);
         err_int = 0;  //Resetting for each new entry
         setmode(HOLD);
         break;

@@ -2,6 +2,6 @@
 #define POSITIONCTRL__H__
 
 void position_init();
-float pos_dir(float);
+void pos_dir(float);
 
 #endif

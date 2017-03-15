@@ -129,6 +129,11 @@ while ~has_quit
             target_deg = input('Enter the desired motor angle in degrees: ');
             fprintf(mySerial, '%f\n', target_deg);
             fprintf('Motor moving to %.3f degrees.\n', target_deg);
+        case 'm'                         % Load step trajectory
+        case 'n'                         % Load cubic trajectory
+        case 'o'                         % Execute trajectory
+            
+            
         case 'q'
             has_quit = true;             % Exit client
         case 'p'                         % Unpower the motor
