@@ -37,7 +37,4 @@ adjust by changing motor spin direction to ccw
 else if error_position < 0
 actual angle too far ccw
 adjust by changing motor spin direction to cw
-
-return abs(error_position) for convenient math
-signs don't matter because all relative
 ---------------------------------------------------------------------*/

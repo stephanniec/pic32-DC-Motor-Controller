@@ -8,17 +8,17 @@
 
 #define BUF_SIZE 200
 #define PLOTPTS 100 // 100 points in ITEST
-#define REF_mA 200  // Reference starts at 200mA
+#define REF_mA 200.0  // Reference starts at 200mA
 
 mode_type pic_mode = IDLE;                // Allocate memory
 static volatile int next_dc = 0;          // New duty cycle
-static volatile float kp_I = 0, ki_I = 0; // Current PI gains
+static volatile float kp_I = 45.0, ki_I = 1.75; // Current PI gains
 static volatile float ref_arr[PLOTPTS];   // Ref current +/- 200mA sqr wave
 static volatile float adc_arr[PLOTPTS];   // Measured current
-static volatile float kp_pos = 0;         // Position PID gains
-static volatile float ki_pos = 0;
-static volatile float kd_pos = 0;
-static volatile float err_int = 0;        // Position integral error
+static volatile float kp_pos = -2.5;         // Position PID gains
+static volatile float ki_pos = 0.0;
+static volatile float kd_pos = 1.0;
+static volatile float eint = 0, err_int = 0;    //integral error
 static volatile float ref_deg = 0;        // Reference angle in deg
 static volatile float holding_current = 0;
 static volatile int store_data = 0;       // Disable data storing
@@ -30,9 +30,8 @@ void __ISR(_TIMER_2_VECTOR, IPL4SOFT) MasterController(void){
     static int itest_count = 0;
     static float ref_current = REF_mA;
     static float adc_current = 0;
-    float e = 0;
-    static float eint = 0; // Position error, integrater error
-    float u = 0, unew = 0; // Current controller output
+    //float e = 0;
+    //float u = 0, unew = 0; // Current controller output
 
     case IDLE:
     {
@@ -72,10 +71,10 @@ void __ISR(_TIMER_2_VECTOR, IPL4SOFT) MasterController(void){
           adc_current = convert_adc();
 
           // PI control: I error (mA) = R - Y
-          e = ref_current - adc_current;
+          float e = ref_current - adc_current;
           eint = eint + e;
-          u = kp_I*e + ki_I*eint; // Gains convert mA to mV
-          unew = ((u/1000)/3.3)*100; // Converts mV to DC = X%
+          float u = kp_I*e + ki_I*eint; // Gains convert mA to mV
+          float unew = ((u/1000)/3.3)*100; // Converts mV to DC = X%
 
           if (unew > 100){  // Actuator saturation
             unew = 100;
@@ -109,30 +108,30 @@ void __ISR(_TIMER_2_VECTOR, IPL4SOFT) MasterController(void){
     }//end ITEST
     case HOLD:
     {
-      char buffer[BUF_SIZE];
+      // char buffer[BUF_SIZE];
 
       // Get desired current
       ref_current = holding_current;
-      sprintf(buffer, "current from pcon = %f\r\n", ref_current);
-      NU32_WriteUART3(buffer);
+      // sprintf(buffer, "current from pcon = %f\r\n", ref_current);
+      // NU32_WriteUART3(buffer);
 
       // Read ADC value (mA)
       adc_current = convert_adc();
-      sprintf(buffer, "adc read = %f\r\n", adc_current);
-      NU32_WriteUART3(buffer);
+      // sprintf(buffer, "adc read = %f\r\n", adc_current);
+      // NU32_WriteUART3(buffer);
 
       // PI control: I error (mA) = R - Y
-      e = ref_current - adc_current;
-      sprintf(buffer, "e = %f\r\n", e);
-      NU32_WriteUART3(buffer);
-      eint = eint + e;
-      sprintf(buffer, "eint = %f\r\n", eint);
-      NU32_WriteUART3(buffer);
+      float e = ref_current - adc_current;
+      // sprintf(buffer, "e = %f\r\n", e);
+      // NU32_WriteUART3(buffer);
 
-      u = kp_I*e + ki_I*eint; // Gains convert mA to mV
-      unew = ((u/1000)/3.3)*100; // Converts mV to DC = X%
-      sprintf(buffer, "unew = %f\r\n", unew);
-      NU32_WriteUART3(buffer);
+      eint = eint + e;
+      // sprintf(buffer, "eint = %f\r\n", eint);
+      // NU32_WriteUART3(buffer);
+
+      float u = kp_I*e;// + ki_I*eint; // Gains convert mA to mV
+      float unew = ((u/1000.)/3.3)*100.; // Converts mV to DC = X%
+
 
       if (unew > 100.0){    // Actuator saturation
         unew = 100.0;
@@ -141,11 +140,27 @@ void __ISR(_TIMER_2_VECTOR, IPL4SOFT) MasterController(void){
         unew = -100.0;
       }
 
-      sprintf(buffer, "unew converted = %f\r\n", unew);
-      NU32_WriteUART3(buffer);
+      // sprintf(buffer, "unew = %f\r\n", unew);
+      // NU32_WriteUART3(buffer);
+
+      // sprintf(buffer, "unew converted = %f\r\n", unew);
+      // NU32_WriteUART3(buffer);
 
       //Calculate new pwm
-      new_pwm(unew);
+      // new_pwm(unew);
+
+      if (unew < 0){
+        LATDbits.LATD6 = 1; //ccw
+        OC1RS = (unsigned int) ((-unew/100.0)*PR3);
+      }
+       else {
+        LATDbits.LATD6 = 0; //cw
+        OC1RS = (unsigned int) ((unew/100.0)*PR3);
+       }
+
+      // sprintf(buffer, "OC1RS = %d\r\n", OC1RS);
+      // NU32_WriteUART3(buffer);
+
       break;
     }
     default:
@@ -161,23 +176,33 @@ void __ISR(_TIMER_2_VECTOR, IPL4SOFT) MasterController(void){
 void __ISR(_TIMER_4_VECTOR, IPL5SOFT) PositionController(void){
   //200Hz, priority lvl 5
   static float actual_deg = 0;
-  static float err = 0, err_dot = 0, err_prev = 0;
-  static float uhold = 0;
+  static float err_prev = 0;
 
   switch (pic_mode){
     case HOLD:
     {
       char buffer[BUF_SIZE];
-      actual_deg = (float) encoder_degree()/100.0;
+
+      int deg_100x = encoder_degree();
+      actual_deg = ((float) deg_100x)/100.0;
       //encoder_degree returns int 100x of actual degree
 
-      err = ref_deg - actual_deg;
-      pos_dir(err);    // Set spin direction
+      float err = ref_deg - actual_deg;
+      // pos_dir(err);    // Set spin direction
 
-      err_dot = err - err_prev;  //Assume finite differences
+      // sprintf(buffer, "err = %f\r\n", err);
+      // NU32_WriteUART3(buffer);
+
+      float err_dot = err - err_prev;  //Assume finite differences
       err_int = err_int + err;
 
+      // sprintf(buffer, "err_dot = %f\r\n", err_dot);
+      // NU32_WriteUART3(buffer);
+
       float current_temp = kp_pos*err + ki_pos*err_int + kd_pos*err_dot;
+
+      // sprintf(buffer, "current_temp = %f\r\n", current_temp);
+      // NU32_WriteUART3(buffer);
 
       if (current_temp > 500){// Max reference current allowed
         holding_current = 500;
@@ -188,6 +213,11 @@ void __ISR(_TIMER_4_VECTOR, IPL5SOFT) PositionController(void){
       else{
         holding_current = current_temp;
       }
+
+      // sprintf(buffer, "OC1RS = %d\r\n", OC1RS);
+      // sprintf(buffer, "holding_current = %f\r\n", holding_current);
+      // NU32_WriteUART3(buffer);
+
 
       err_prev = err; //Save for comparison later
       break;
@@ -220,6 +250,9 @@ int main()
   position_init(); // Setting up Timer4 for position control
 
   __builtin_enable_interrupts();
+
+  float kp_curr_temp = 0, ki_curr_temp = 0;
+  float kp_pos_temp = 0, ki_pos_temp = 0, kd_pos_temp = 0;
 
   while(1)
   {
@@ -265,9 +298,13 @@ int main()
       case 'g': // Get current gains from MATLAB
       {
         NU32_ReadUART3(buffer, BUF_SIZE);
-        sscanf(buffer, "%f", &kp_I);        // kp current define
+        sscanf(buffer, "%f", &kp_curr_temp);        // kp current define
         NU32_ReadUART3(buffer, BUF_SIZE);
-        sscanf(buffer, "%f", &ki_I);        // ki current define
+        sscanf(buffer, "%f", &ki_curr_temp);        // ki current define
+        __builtin_disable_interrupts();
+        kp_I = kp_curr_temp;
+        ki_I = ki_curr_temp;
+        __builtin_enable_interrupts();
         break;
       }
       case 'h': // Send current gains to MATLAB
@@ -281,11 +318,16 @@ int main()
       case 'i': // Get position gains from MATLAB
       {
         NU32_ReadUART3(buffer, BUF_SIZE);
-        sscanf(buffer, "%f", &kp_pos);     // define kp position
+        sscanf(buffer, "%f", &kp_pos_temp);     // define kp position
         NU32_ReadUART3(buffer, BUF_SIZE);
-        sscanf(buffer, "%f", &ki_pos);     // define ki positon
+        sscanf(buffer, "%f", &ki_pos_temp);     // define ki positon
         NU32_ReadUART3(buffer, BUF_SIZE);
-        sscanf(buffer, "%f", &kd_pos);     // define kd position
+        sscanf(buffer, "%f", &kd_pos_temp);     // define kd position
+        __builtin_disable_interrupts();
+        kp_pos = kp_pos_temp;
+        ki_pos = ki_pos_temp;
+        kd_pos = kd_pos_temp;
+        __builtin_enable_interrupts();
         break;
       }
       case 'j': // Send position gains to MATLAB
@@ -318,7 +360,9 @@ int main()
       {
         NU32_ReadUART3(buffer, BUF_SIZE);
         sscanf(buffer, "%f", &ref_deg);
-        err_int = 0;  //Resetting for each new entry
+        eint = 0;
+        err_int = 0;  //Resetting for each new position entry
+        holding_current = 0;
         setmode(HOLD);
         break;
       }
