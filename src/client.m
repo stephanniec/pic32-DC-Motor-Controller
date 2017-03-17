@@ -23,7 +23,7 @@ fprintf('Opening port %s....\n',port);
 
 % settings for opening the serial port. baud rate 230400, hardware flow control
 % wait up to 120 seconds for data before timing out
-mySerial = serial(port, 'BaudRate', 230400, 'FlowControl', 'hardware','Timeout',10); 
+mySerial = serial(port, 'BaudRate', 230400, 'FlowControl', 'hardware','Timeout',30); 
 % opens serial connection
 fopen(mySerial);
 % closes serial port when function exits
@@ -43,9 +43,12 @@ while ~has_quit
     fprintf('     g: Set current gains\n'                   );
     fprintf('     h: Get current gains\n'                   );
     fprintf('     i: Set position gains\n'                  );
-    fprintf('     j: Get position agins\n'                  );
+    fprintf('     j: Get position gains\n'                  );
     fprintf('     k: Test current control\n'                );
     fprintf('     l: Go to angle (deg)\n'                   );
+    fprintf('     m: Load step trajectory\n'                );
+    fprintf('     n: Load cubic trajectory\n'               );
+    fprintf('     o: Execute trajectory\n'                  );
     fprintf('     p: Unpower the motor\n'                   );
     fprintf('     q: Quit client\n'                         );
     fprintf('     r: Get mode\n'                            );
@@ -130,10 +133,50 @@ while ~has_quit
             fprintf(mySerial, '%f\n', target_deg);
             fprintf('Motor moving to %.3f degrees.\n', target_deg);
         case 'm'                         % Load step trajectory
+            step = input('Enter step trajectory, in sec and degrees [time1, ang1; time2, ang2;...]:\n');
+            while (length(step) > 10)
+                fprintf('Error: Maximum trajectory time is 10 seconds.\n');
+                step = input('Enter step trajectory, in sec and degrees [time1, ang1; time2, ang2;...]:\n');
+            end
+            ref_step = genRef(step, 'step');
+            no_pts = size(ref_step, 2);
+            fprintf(mySerial, '%d\n', no_pts);
+            for i = 1:no_pts
+                fprintf(mySerial, '%f\n', ref_step(i));     %sending step points to main.c
+            end
         case 'n'                         % Load cubic trajectory
+            cube = input('Enter cubic trajectory, in sec and degrees [time1, ang1; time2, ang2;...]:\n');
+            while (length(cube) > 10)
+                fprintf('Error: Maximum trajectory time is 10 seconds.\n');
+                cube = input('Enter cubic trajectory, in sec and degrees [time1, ang1; time2, ang2;...]:\n');
+            end
+            ref_cube = genRef(cube, 'cubic');
+            no_pts = size(ref_cube, 2);
+            fprintf(mySerial, '%d\n', no_pts);
+            for i = 1:no_pts
+                fprintf(mySerial, '%f\n', ref_cube(i));     %sending cube points to main.c
+            end           
         case 'o'                         % Execute trajectory
-            
-            
+            fprintf('Executing trajectory.\n');
+            nsamples = fscanf(mySerial,'%d');       % first get the number of samples being sent
+            nsamples = 2.5*200;
+            data = zeros(nsamples,2);               % two values per sample:  ref and actual
+            for i=1:nsamples
+                data(i,:) = fscanf(mySerial,'%d %d'); % read in data from PIC32; assume ints, in mA
+                times(i) = (i-1)*0.5;                 % 5 ms between samples
+            end
+            if nsamples > 1						        
+                stairs(times,data(:,1:2));            % plot the reference and actual
+            else
+                fprintf('Only 1 sample received\n')
+                disp(data);
+            end
+            % compute the average error
+            score = mean(abs(data(:,1)-data(:,2)));
+            fprintf('\nAverage error: %5.1f mA\n',score);
+            title(sprintf('Average error: %5.1f mA',score));
+            ylabel('Motor Angle (deg)');
+            xlabel('Time (ms)');   
         case 'q'
             has_quit = true;             % Exit client
         case 'p'                         % Unpower the motor

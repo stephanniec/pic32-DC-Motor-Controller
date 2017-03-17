@@ -15,13 +15,19 @@ static volatile int next_dc = 0;          // New duty cycle
 static volatile float kp_I = 45.0, ki_I = 1.75; // Current PI gains
 static volatile float ref_arr[PLOTPTS];   // Ref current +/- 200mA sqr wave
 static volatile float adc_arr[PLOTPTS];   // Measured current
+static volatile int store_data = 0;       // Disable data storing
 static volatile float kp_pos = -2.5;         // Position PID gains
 static volatile float ki_pos = 0.0;
-static volatile float kd_pos = 1.0;
-static volatile float eint = 0, err_int = 0;    //integral error
+static volatile float kd_pos = -100.0;
+static volatile float eint = 0, err_int = 0;   // integral error
+static volatile float err_prev = 0;            // derivative error
 static volatile float ref_deg = 0;        // Reference angle in deg
 static volatile float holding_current = 0;
-static volatile int store_data = 0;       // Disable data storing
+static volatile int traj_len = 0;         // # of pts in trajectory
+static volatile float Stored_traj[2000];  // Max # angles 200*10s
+static volatile float Motor_traj[2000];
+static volatile int Track_flag = 0;       // Disable tracking
+static volatile int Tind = 0;             // Trajectory index
 
 void __ISR(_TIMER_2_VECTOR, IPL4SOFT) MasterController(void){
   // 5000 Hz
@@ -108,30 +114,17 @@ void __ISR(_TIMER_2_VECTOR, IPL4SOFT) MasterController(void){
     }//end ITEST
     case HOLD:
     {
-      // char buffer[BUF_SIZE];
-
       // Get desired current
       ref_current = holding_current;
-      // sprintf(buffer, "current from pcon = %f\r\n", ref_current);
-      // NU32_WriteUART3(buffer);
 
       // Read ADC value (mA)
       adc_current = convert_adc();
-      // sprintf(buffer, "adc read = %f\r\n", adc_current);
-      // NU32_WriteUART3(buffer);
 
       // PI control: I error (mA) = R - Y
       float e = ref_current - adc_current;
-      // sprintf(buffer, "e = %f\r\n", e);
-      // NU32_WriteUART3(buffer);
-
       eint = eint + e;
-      // sprintf(buffer, "eint = %f\r\n", eint);
-      // NU32_WriteUART3(buffer);
-
-      float u = kp_I*e;// + ki_I*eint; // Gains convert mA to mV
+      float u = kp_I*e + ki_I*eint; // Gains convert mA to mV
       float unew = ((u/1000.)/3.3)*100.; // Converts mV to DC = X%
-
 
       if (unew > 100.0){    // Actuator saturation
         unew = 100.0;
@@ -140,29 +133,36 @@ void __ISR(_TIMER_2_VECTOR, IPL4SOFT) MasterController(void){
         unew = -100.0;
       }
 
-      // sprintf(buffer, "unew = %f\r\n", unew);
-      // NU32_WriteUART3(buffer);
-
-      // sprintf(buffer, "unew converted = %f\r\n", unew);
-      // NU32_WriteUART3(buffer);
-
       //Calculate new pwm
-      // new_pwm(unew);
-
-      if (unew < 0){
-        LATDbits.LATD6 = 1; //ccw
-        OC1RS = (unsigned int) ((-unew/100.0)*PR3);
-      }
-       else {
-        LATDbits.LATD6 = 0; //cw
-        OC1RS = (unsigned int) ((unew/100.0)*PR3);
-       }
-
-      // sprintf(buffer, "OC1RS = %d\r\n", OC1RS);
-      // NU32_WriteUART3(buffer);
+      new_pwm(unew);
 
       break;
-    }
+    }// end HOLD
+    case TRACK:
+    {
+      // Get desired current
+      ref_current = holding_current;
+
+      // Read ADC value (mA)
+      adc_current = convert_adc();
+
+      // PI control: I error (mA) = R - Y
+      float e = ref_current - adc_current;
+      eint = eint + e;
+      float u = kp_I*e + ki_I*eint; // Gains convert mA to mV
+      float unew = ((u/1000.)/3.3)*100.; // Converts mV to DC = X%
+
+      if (unew > 100.0){    // Actuator saturation
+        unew = 100.0;
+      }
+      else if (unew < -100.0){
+        unew = -100.0;
+      }
+
+      //Calculate new pwm
+      new_pwm(unew);
+      break;
+    }// end TRACK
     default:
     {
       break;
@@ -176,33 +176,20 @@ void __ISR(_TIMER_2_VECTOR, IPL4SOFT) MasterController(void){
 void __ISR(_TIMER_4_VECTOR, IPL5SOFT) PositionController(void){
   //200Hz, priority lvl 5
   static float actual_deg = 0;
-  static float err_prev = 0;
 
   switch (pic_mode){
     case HOLD:
     {
-      char buffer[BUF_SIZE];
-
       int deg_100x = encoder_degree();
       actual_deg = ((float) deg_100x)/100.0;
       //encoder_degree returns int 100x of actual degree
 
+      //PID
       float err = ref_deg - actual_deg;
-      // pos_dir(err);    // Set spin direction
-
-      // sprintf(buffer, "err = %f\r\n", err);
-      // NU32_WriteUART3(buffer);
-
       float err_dot = err - err_prev;  //Assume finite differences
       err_int = err_int + err;
 
-      // sprintf(buffer, "err_dot = %f\r\n", err_dot);
-      // NU32_WriteUART3(buffer);
-
       float current_temp = kp_pos*err + ki_pos*err_int + kd_pos*err_dot;
-
-      // sprintf(buffer, "current_temp = %f\r\n", current_temp);
-      // NU32_WriteUART3(buffer);
 
       if (current_temp > 500){// Max reference current allowed
         holding_current = 500;
@@ -214,18 +201,46 @@ void __ISR(_TIMER_4_VECTOR, IPL5SOFT) PositionController(void){
         holding_current = current_temp;
       }
 
-      // sprintf(buffer, "OC1RS = %d\r\n", OC1RS);
-      // sprintf(buffer, "holding_current = %f\r\n", holding_current);
-      // NU32_WriteUART3(buffer);
-
-
       err_prev = err; //Save for comparison later
       break;
-    }
+    }// end HOLD
     case TRACK:
     {
+      int deg_100x = encoder_degree();
+      actual_deg = ((float) deg_100x)/100.0;
+      //encoder_degree returns int 100x of actual degree
+
+      Motor_traj[Tind] = actual_deg;  // Storing current measured ang
+
+      //PID
+      float err = Stored_traj[Tind] - actual_deg;
+      float err_dot = err - err_prev;
+      err_int = err_int + err;
+
+      float current_temp = kp_pos*err + ki_pos*err_int + kd_pos*err_dot;
+
+      if (current_temp > 500){// Max reference current allowed
+        holding_current = 500;
+      }
+      else if (current_temp < -500){
+        holding_current = -500;
+      }
+      else{
+        holding_current = current_temp;
+      }
+
+      err_prev = err;
+
+      Tind++; // Increasing trajectory index by 1
+
+      if (Tind == traj_len){
+          ref_deg = Stored_traj[Tind - 1]; // Ref angle for final HOLD
+          Tind = 0;          // Reset index
+          Track_flag = 0;    // Stop tracking
+      }
+
       break;
-    }
+    }// end TRACK
     default:
     {
       break;
@@ -360,10 +375,68 @@ int main()
       {
         NU32_ReadUART3(buffer, BUF_SIZE);
         sscanf(buffer, "%f", &ref_deg);
-        eint = 0;
-        err_int = 0;  //Resetting for each new position entry
+        eint = 0;     // Clear current integral error
+        err_int = 0;  // Clear position integral error
+        err_prev = 0; // Clear position derivative error
         holding_current = 0;
         setmode(HOLD);
+        break;
+      }
+      case 'm':    // Receiving step trajectory from MATLAB
+      {
+        int size = 0, ind = 0;
+        float traj_temp = 0;
+        NU32_ReadUART3(buffer, BUF_SIZE);
+        sscanf(buffer, "%d", &size);  // Get # of step pts
+        __builtin_disable_interrupts();
+        traj_len = size;
+        for (ind = 0; ind < traj_len; ind++)  // Getting ref pts
+        {
+          NU32_ReadUART3(buffer, BUF_SIZE);
+          sscanf(buffer, "%f", &traj_temp);
+          Stored_traj[ind] = traj_temp;
+        }
+        __builtin_enable_interrupts();
+        break;
+      }
+      case 'n':    // Receiving cubic trajectory from MATLAB
+      {
+        int size = 0, ind = 0;
+        float traj_temp = 0;
+        NU32_ReadUART3(buffer, BUF_SIZE);
+        sscanf(buffer, "%d", &size);  // Get # of cubic pts
+        __builtin_disable_interrupts();
+        traj_len = size;
+        for(ind = 0; ind < traj_len; ind++)  //Getting ref pts
+        {
+          NU32_ReadUART3(buffer,BUF_SIZE);
+          sscanf(buffer, "%f", &traj_temp);
+          Stored_traj[ind] = traj_temp;
+        }
+        __builtin_enable_interrupts();
+        break;
+      }
+      case 'o':    // Executing stored trajectory
+      {
+        int i = 0;
+        eint = 0;       // Clear current integral error
+        err_int = 0;    // Clear position integral error
+        err_prev = 0;    // Clear position derivative error
+        holding_current = 0;    // Clear ref HOLD current
+        Track_flag = 1;
+        setmode(TRACK);
+        while (Track_flag){
+          ; //Do nothing
+        }
+        setmode(HOLD);
+        __builtin_disable_interrupts();
+          sprintf(buffer, "%d\r\n", traj_len);
+          NU32_WriteUART3(buffer);
+        for (i = 0; i < traj_len; i++){  // Set data points back to MATLAB
+          sprintf(buffer, "%d %d\r\n", (int)Stored_traj[i], (int)Motor_traj[i]);
+          NU32_WriteUART3(buffer);
+        }
+        __builtin_enable_interrupts();
         break;
       }
       case 'p': // Unpower motor
